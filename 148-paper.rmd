@@ -1,0 +1,210 @@
+```{r include=FALSE}
+library(tidyverse)
+library(car)
+library(DescTools)
+library(rstatix)
+library(readxl)
+library(olsrr)
+library(MASS)
+library(sp)
+library(ggplot2)
+library(ggthemes)
+library(gstat)
+library(lmtest)
+library(tseries)
+library(sandwich)
+library(skedastic)
+library(nortest)
+```
+
+```{r include=FALSE}
+times <- read_csv("C:\\Users\\Rhys\\Downloads\\times_day2 (1).csv")
+times2 <- read_csv("C:\\Users\\Rhys\\Downloads\\times_day3.csv")
+score <- read_csv("C:\\Users\\Rhys\\Downloads\\scores_day2 (1).csv")
+score2 <- read_csv("C:\\Users\\Rhys\\Downloads\\scores_day3.csv")
+info <- read_excel("C:\\Users\\Rhys\\Downloads\\info_day2.xlsx")
+info2 <- read_excel("C:\\Users\\Rhys\\Downloads\\info_day3.xlsx")
+
+times <- rbind(times[1:14], times2)
+score <- rbind(score[1:14], score2)
+info <- rbind(info, info2)
+
+final <- info %>%
+  left_join(score, by = "unique_id") %>%
+  left_join(times, by = "unique_id") %>%
+  rowwise() %>%
+  arrange(treatment.x) %>%
+  rename(round_1_score = round_1.x,
+         round_2_score = round_2.x,
+         round_3_score = round_3.x,
+         round_4_score = round_4.x,
+         round_5_score = round_5.x,
+         round_6_score = round_6.x,
+         round_7_score = round_7.x,
+         round_8_score = round_8.x,
+         round_9_score = round_9.x,
+         round_10_score = round_10.x,
+         round_11_score = round_11.x,
+         round_12_score = round_12.x,
+         round_1_time = round_1.y,
+         round_2_time = round_2.y,
+         round_3_time = round_3.y,
+         round_4_time = round_4.y,
+         round_5_time = round_5.y,
+         round_6_time = round_6.y,
+         round_7_time = round_7.y,
+         round_8_time = round_8.y,
+         round_9_time = round_9.y,
+         round_10_time = round_10.y,
+         round_11_time = round_11.y,
+         round_12_time = round_12.y,
+         Year = "Year:",
+         Course = "Course:",
+         Age = "Age:") %>%
+  mutate(treatment = treatment.x,
+         shape = as.factor(ifelse(treatment %in% c(1, 3, 5, 7), "hex", "square")),
+         size = as.factor(ifelse(treatment %in% c(1, 2, 5, 6), "small", "large")),
+         color = as.factor(ifelse(treatment %in% c(1:4), "static", "dynamic")),
+         shape.lm = ifelse(shape == "square", 0, 1),
+         size.lm = ifelse(size == "small", 0, 1),
+         color.lm = ifelse(color == "dynamic", 0, 1),
+         Sex = factor(`Sex at Birth:`),
+         Sex.lm = ifelse(Sex == "Female", 0, 1),
+         Lenses = factor(`Wears Corrective Lenses:`),
+         Lenses.lm = ifelse(Lenses == "No", 0 , 1),
+         round_1 = 1000 * round_1_score / round_1_time,
+         round_2 = 1000 * round_2_score / round_2_time,
+         round_3 = 1000 * round_3_score / round_3_time,
+         round_4 = 1000 * round_4_score / round_4_time,
+         round_5 = 1000 * round_5_score / round_5_time,
+         round_6 = 1000 * round_6_score / round_6_time,
+         round_7 = 1000 * round_7_score / round_7_time,
+         round_8 = 1000 * round_8_score / round_8_time,
+         round_9 = 1000 * round_9_score / round_9_time,
+         round_10 = 1000 * round_10_score / round_10_time,
+         round_11 = 1000 * round_11_score / round_11_time,
+         round_12 = 1000 * round_12_score / round_12_time,
+         avg = weighted.mean(c_across(round_1:round_12), w = c(4:15)),
+         log_avg = log(avg)) %>%
+  dplyr::select(-c(1, 4, 5, 6, 8, 9, 12, 25)) %>%
+  ungroup()
+```
+
+```{r}
+ggplot(data = final, aes(x = color, y = avg)) +
+  geom_violin(trim = F) + geom_boxplot(aes(fill = color), width = 0.42, outliers = F) +
+  stat_summary(fun = median, geom = "line", aes(group = 1), linetype = "dashed") +
+  theme_clean(base_size = 18) + theme(legend.position = "none") +
+  labs(x = "Color", y = "Time-Adjusted Accuracy")
+```
+
+```{r}
+ggplot(data = final, aes(x = size, y = avg)) +
+  geom_violin(trim = F) + geom_boxplot(aes(fill = size), width = 0.44, outliers = F) +
+  stat_summary(fun = median, geom = "line", aes(group = 1), linetype = "dashed") +
+  theme_clean(base_size = 18) + theme(legend.position = "none") +
+  labs(x = "Size", y = "Time-Adjusted Accuracy")
+```
+
+```{r}
+ggplot(data = final, aes(x = shape, y = avg)) +
+  geom_violin(trim = F) + geom_boxplot(aes(fill = shape), width = 0.38, outliers = F) +
+  stat_summary(fun = median, geom = "line", aes(group = 1), linetype = "dashed") +
+  theme_clean(base_size = 18) + theme(legend.position = "none") +
+  labs(x = "Shape", y = "Time-Adjusted Accuracy")
+```
+
+```{r}
+anova <- aov(log_avg ~ shape * color * size + Sex + sleep + Lenses, final)
+summary(anova)
+
+posthoc <- aov(avg ~ shape * color * size, final)
+PostHocTest(posthoc, method =  "duncan")
+```
+
+```{r}
+boxcox(anova, lambda = seq(-1, 1))
+```
+
+```{r}
+plot(anova)
+```
+
+```{r}
+shapiro.test(residuals(anova))
+bartlett.test(log_avg ~ interaction(shape, color, size), data = final)
+```
+
+```{r}
+model <- lm(log_avg ~ shape.lm * color.lm * size.lm + Sex.lm + sleep + Lenses.lm, final)
+ols_regress(model)
+```
+
+```{r}
+sf.test(model$residuals)
+cvm.test(model$residuals)
+ad.test(model$residuals)
+lillie.test(model$residuals)
+jarque.bera.test(model$residuals)
+pearson.test(model$residuals)
+```
+
+```{r}
+white(model)
+ols_test_breusch_pagan(model)
+gqtest(model)
+```
+
+```{r}
+resettest(model)
+raintest(model, order.by = ~ size.lm, data = final)
+raintest(model, order.by = ~ color.lm, data = final)
+raintest(model, order.by = ~ shape, data = final)
+raintest(model, order.by = ~ Sex.lm, data = final)
+raintest(model, order.by = ~ sleep, data = final)
+raintest(model, order.by = ~ Lenses.lm, data = final)
+```
+
+```{r}
+ols_coll_diag(model)
+```
+
+```{r}
+ols_plot_resid_lev(model)
+ols_plot_cooksd_bar(model)
+ols_plot_resid_hist(model)
+ols_plot_resid_qq(model)
+ols_plot_resid_box(model)
+```
+
+```{r}
+ggplot(final, aes(x = shape, y = avg, color = size, group = size)) +
+  stat_summary(fun = mean, geom = "line", linewidth = 1.2) +
+  stat_summary(fun = mean, geom = "point", size = 3) +
+  facet_wrap(~ color) +
+  labs(x = "Shape", y = "Time-Adjusted Accuracy", color = "Size") +
+  theme_clean(base_size = 18)
+```
+
+```{r}
+ggplot(final, aes(x = color, y = avg, color = shape, group = shape)) +
+  stat_summary(fun = mean, geom = "line", linewidth = 1.2) +
+  stat_summary(fun = mean, geom = "point", size = 3) +
+  facet_wrap(~ size) +
+  labs(x = "Color", y = "Time-Adjusted Accuracy", color = "Shape") +
+  theme_clean(base_size = 18)
+```
+
+```{r}
+ggplot(final, aes(x = size, y = avg, color = color, group = color)) +
+  stat_summary(fun = mean, geom = "line", linewidth = 1.2) +
+  stat_summary(fun = mean, geom = "point", size = 3) +
+  facet_wrap(~ shape) +
+  labs(x = "Size", y = "Time-Adjusted Accuracy", color = "Color") +
+  theme_clean(base_size = 18)
+```
+
+```{r}
+plot.design(avg ~ shape*size*color, data = final, ylab = "Time-Adjusted Accuracy",
+            cex = 1.45, cex.lab = 1.45, cex.axis = 1.45)
+```
