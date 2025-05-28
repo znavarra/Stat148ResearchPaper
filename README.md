@@ -9,3 +9,5 @@ paper.ipynb - contains codes for some of the data visualizations in the research
 test_exec.py - contains the codebase for the game
 
 info.csv, score.csv, times.csv - the csv files warehousing the data collected by the test_exec.py
+
+Stat 148 Game Instructions.pptx - contains the instructions of the game to the participants
